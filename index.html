@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Study HQ</title>
+  <meta name="description" content="Your one place for mistakes, topics and focus sessions.">
+  <meta name="theme-color" content="#f7f7fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121318" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try { const t = localStorage.getItem('shq-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <div id="app">
+    <nav id="nav" aria-label="Main"></nav>
+    <main id="main" tabindex="-1"><div class="loading">Loading Study HQ…</div></main>
+  </div>
+  <div id="modals"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <noscript>Study HQ needs JavaScript turned on.</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

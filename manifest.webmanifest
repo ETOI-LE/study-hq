@@ -1,0 +1,13 @@
+{
+  "name": "Study HQ",
+  "short_name": "Study HQ",
+  "description": "Your one place for mistakes, topics and focus sessions.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f7fa",
+  "theme_color": "#5468E8",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
