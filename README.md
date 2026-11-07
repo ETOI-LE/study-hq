@@ -2,6 +2,8 @@
 
 A study app for IB Diploma (and other) students: focus sessions, a mistake log with redo mode, a topic tracker and a Today screen that suggests what to do next. Phase 1 of the spec in "Goal and context".
 
+**Live link:** https://etoi-le.github.io/study-hq/ (hosted on GitHub Pages from this repo; push to `main` to update it).
+
 ## How data is stored
 
 Each person's data lives only in their own browser (IndexedDB, including photos). Nothing is sent to a server, there is no sign-up, and no analytics. Friends who open the same link each get their own empty app. To move data between devices, use Settings › Backups › Export everything, then Import on the other device.
