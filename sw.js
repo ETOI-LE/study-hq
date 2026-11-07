@@ -1,11 +1,14 @@
-// Offline support: cache the app shell, serve it cache-first, update in the background.
-const CACHE = 'study-hq-v1';
+// Offline support: cache the app shell; network first, cache as the offline fallback.
+const CACHE = 'study-hq-v2';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './icons/icon.svg', './css/styles.css',
   './js/app.js', './js/db.js', './js/store.js', './js/logic.js', './js/ui.js', './js/session.js',
   './js/data-ib.js', './js/backup.js', './js/sample.js',
   './js/views/onboarding.js', './js/views/today.js', './js/views/focus.js',
   './js/views/mistakes.js', './js/views/topics.js', './js/views/settings.js',
+  './js/math.js', './js/views/practice.js', './js/views/papers.js', './js/views/cards.js',
+  './js/views/review.js', './js/views/prep.js', './js/views/share.js',
+  './vendor/katex/katex.min.js', './vendor/katex/katex.min.css',
 ];
 
 self.addEventListener('install', (e) => {

@@ -1,12 +1,12 @@
 # Study HQ
 
-A study app for IB Diploma (and other) students: focus sessions, a mistake log with redo mode, a topic tracker and a Today screen that suggests what to do next. Phase 1 of the spec in "Goal and context".
+A study app for IB Diploma (and other) students: focus sessions, a mistake log with redo mode, a topic tracker and a Today screen that suggests what to do next, plus (Phase 2) a practice log, past paper tracker, flashcards, weekly review, test prep packs and share packs. Built from the spec in "Goal and context".
 
 **Live link:** https://etoi-le.github.io/study-hq/ (hosted on GitHub Pages from this repo; push to `main` to update it).
 
 ## How data is stored
 
-Each person's data lives only in their own browser (IndexedDB, including photos). Nothing is sent to a server, there is no sign-up, and no analytics. Friends who open the same link each get their own empty app. To move data between devices, use Settings › Backups › Export everything, then Import on the other device.
+Each person's data lives only in their own browser (IndexedDB, including photos). Nothing is sent to a server, there is no sign-up, and no analytics. Share packs are the only sharing: a file, a code, or a link whose pack lives after the `#` (never sent to the server), and they contain only what the sender picks. Friends who open the same link each get their own empty app. To move data between devices, use Settings › Backups › Export everything, then Import on the other device.
 
 ## Running it locally
 
@@ -27,6 +27,7 @@ It's a static site with no build step, so any static host works. For example: Gi
 - `js/store.js`, `js/db.js`: state and IndexedDB storage
 - `js/logic.js`: smart logic (redo schedule, topic priority, Today suggestions)
 - `js/session.js`: focus timer engine (timestamp-based, sounds scheduled on the Web Audio clock)
-- `js/views/*`: onboarding, Today, Focus, Mistakes, Topics, Settings
+- `js/views/*`: onboarding, Today, Focus, Mistakes, Topics, Settings, and Phase 2: Practice, Papers, Cards, Review, Prep, Share
+- `js/math.js`, `vendor/katex/`: maths on flashcards ($…$), using KaTeX 0.19.1 (MIT licence, bundled so it works offline with no third-party requests)
 - `js/backup.js`, `js/sample.js`, `js/data-ib.js`: backups, sample data, IB subjects and topics
 - `sw.js`, `manifest.webmanifest`: offline support and install as an app

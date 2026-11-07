@@ -52,7 +52,7 @@ export function openQuickAdd(opts = {}) {
   const editing = opts.edit || null;
   const lastSubj = S.settings.lastSubjectId && subjectById(S.settings.lastSubjectId) ? S.settings.lastSubjectId : null;
   const f = editing ? { ...editing } : {
-    source: '', wrong: '', fix: '',
+    source: opts.source || '', wrong: '', fix: '', paperId: opts.paperId || null,
     subjectId: opts.subjectId ?? lastSubj ?? S.subjects[0]?.id ?? null,
     topicId: opts.topicId || '', date: today(), type: '', difficulty: '', marksLost: '',
     photoQ: null, photoSol: null, link: '', notes: '', sessionId: opts.sessionId || null,
@@ -101,7 +101,8 @@ export function openQuickAdd(opts = {}) {
         ${editing && editing.redoHistory?.length ? `<p class="small muted">Redo history: ${editing.redoHistory.map((r) => `${fmtDay(r.day)} ${r.result === 'got' ? 'Got it' : 'Not yet'}`).join(' · ')}</p>` : ''}
         <div class="row-actions" style="justify-content:space-between">
           ${editing ? `<div class="row"><button type="button" class="btn btn-ghost btn-danger" data-act="del">${icon('trash', 18)} Delete</button>
-            ${editing.status === 'fixed' ? '<button type="button" class="btn btn-ghost" data-act="reopen">Reopen</button>' : ''}</div>`
+            ${editing.status === 'fixed' ? '<button type="button" class="btn btn-ghost" data-act="reopen">Reopen</button>' : ''}
+            ${on('flashcards') ? `<button type="button" class="btn btn-ghost" data-act="toCard">${icon('cards', 18)} ${S.flashcards.some((c) => c.sourceMistakeId === editing.id) ? 'Is a flashcard' : 'Make flashcard'}</button>` : ''}</div>`
             : `<button type="button" class="btn btn-ghost" data-act="saveAnother">Save & add another</button>`}
           <button class="btn btn-primary" type="submit">Save</button>
         </div>
@@ -157,6 +158,11 @@ export function openQuickAdd(opts = {}) {
         closeModal(m);
         bus.refresh();
       },
+      toCard: async (el) => {
+        const { cardFromMistake } = await import('./cards.js');
+        readForm(m.body, f);
+        if (cardFromMistake({ ...editing, ...f })) el.innerHTML = `${icon('check', 18)} Is a flashcard`;
+      },
       reopen: () => {
         save('mistakes', { ...editing, status: 'open', gotIt: 0, lastGotItDay: null, dueAt: addDays(today(), 1), fixedAt: null });
         saved = true; closeModal(m); toast('Reopened — redo due tomorrow.'); bus.refresh();
@@ -193,7 +199,7 @@ export function openQuickAdd(opts = {}) {
     if (another) {
       newPhotos.length = 0;
       saved = false;
-      Object.assign(f, { id: undefined, createdAt: undefined, updatedAt: undefined, source: '', wrong: '', fix: '', photoQ: null, photoSol: null, marksLost: '', link: '', notes: '', type: '', difficulty: '' });
+      Object.assign(f, { id: undefined, createdAt: undefined, updatedAt: undefined, source: opts.source || '', wrong: '', fix: '', photoQ: null, photoSol: null, marksLost: '', link: '', notes: '', type: '', difficulty: '' });
       delete f.id; delete f.createdAt; delete f.updatedAt; delete f.status; delete f.dueAt; delete f.gotIt; delete f.lastGotItDay; delete f.redoHistory;
       renderModal(m);
       toast('Saved. Next one…');
@@ -243,7 +249,7 @@ export function openRedo(opts = {}) {
           <div class="row" style="justify-content:center;gap:8px">${subjectTag(x.subjectId)}${t ? `<span class="pill">${esc(topicLabel(t))}</span>` : ''}</div>
           <div class="q">${esc(x.source)}</div>
           ${x.photoQ ? `<img class="photo-thumb" style="margin:0 auto 12px" data-photo="${esc(x.photoQ)}" alt="Question photo">` : ''}
-          ${lastFixed ? `<p class="small" style="color:var(--ok)">Fixed! That last one is retired.</p>` : ''}
+          ${lastFixed ? `<p class="small fixed-msg">${icon('check', 16)} Fixed! That last one is retired.</p>` : ''}
           ${revealed ? `<div class="reveal-box">
               <div class="small muted">What went wrong</div><p>${esc(x.wrong)}</p>
               <div class="small muted">Fix / rule</div><p class="fix">${esc(x.fix)}</p>

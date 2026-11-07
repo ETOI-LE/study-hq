@@ -32,7 +32,7 @@ function topicRow(t, s, isSub = false) {
         <div class="row" style="gap:8px"><b>${esc(t.name)}</b>${st.focus ? '<span class="pill accent">Focus</span>' : ''}</div>
         <div class="reason">${esc(st.reason)}</div>
         <div class="row" style="margin-top:6px;gap:12px"><div class="confbar" style="--c:${esc(s.color)}"><div style="width:${((t.confidence || 0) / 5) * 100}%"></div></div>
-          <span class="tiny muted">Priority <span class="score">${st.score}</span></span></div>
+          <span class="tiny muted">Priority <span class="score">${st.score}</span></span>${on('practiceLog') && st.practiced ? `<span class="tiny muted">· ${st.practiced} questions practised</span>` : ''}</div>
       </div>
       <div class="row wrap" style="gap:6px">${confButtons(t, s.color)}
         <button class="icon-btn" data-act="study" data-id="${t.id}" aria-label="Study ${esc(t.name)} now" title="Start a session on this topic">${icon('play', 18)}</button>

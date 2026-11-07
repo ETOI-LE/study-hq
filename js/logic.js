@@ -132,10 +132,19 @@ export function openMistakesIn(t) {
   return S.mistakes.filter((m) => m.status === 'open' && ids.has(m.topicId)).length;
 }
 
-export function isFocusTopic(t) {
-  // Focus topics come from the weekly review (Phase 2).
+// Focus topics are picked in the weekly review and last until the next one (8 days).
+export function activeFocusIds() {
   const f = S.meta.focusTopics;
-  return !!(f && f.week === weekStart() && f.ids && f.ids.includes(t.id));
+  if (!f || !f.ids || !on('weeklyReview')) return [];
+  const d = today();
+  if (f.from && f.until && d >= f.from && d < f.until) return f.ids;
+  return [];
+}
+export function isFocusTopic(t) { return activeFocusIds().includes(t.id); }
+
+export function practiceDoneIn(t) {
+  const ids = new Set(topicFamilyIds(t));
+  return S.practiceSets.filter((p) => ids.has(p.topicId)).reduce((n, p) => n + (p.attempted || 0), 0);
 }
 
 export function topicStats(t) {
@@ -146,6 +155,7 @@ export function topicStats(t) {
   const daysSince = last ? daysBetween(last, today()) : null;
   const staleness = daysSince === null ? 4 : Math.min(daysSince / 7, 4);
   const focus = isFocusTopic(t);
+  const practiced = on('practiceLog') ? practiceDoneIn(t) : 0;
   const score = 2 * (5 - confForScore) + open + staleness + (focus ? 3 : 0);
 
   const reasons = [];
@@ -155,7 +165,7 @@ export function topicStats(t) {
   else if (daysSince === 0) reasons.push('studied today');
   else reasons.push(`not studied for ${daysSince} day${daysSince === 1 ? '' : 's'}`);
   if (focus) reasons.push('focus topic this week');
-  return { conf, open, last, daysSince, score: Math.round(score * 10) / 10, reason: reasons.join(' · '), focus };
+  return { conf, open, last, daysSince, practiced, score: Math.round(score * 10) / 10, reason: reasons.join(' · '), focus };
 }
 
 export function suggestedType(t, st = topicStats(t)) {
@@ -224,7 +234,16 @@ export function upNext() {
       prefill: { subjectId: m.subjectId, topicIds: m.topicId ? [m.topicId] : [], type: 'redo', goal: 'Redo my due mistakes' },
     });
   }
-  // (Due flashcards appear here in Phase 2.)
+  if (on('flashcards')) {
+    const n = Math.min(dueCards().length, cardsLeftToday());
+    if (n > 0) {
+      items.push({
+        kind: 'cards', title: `Review ${n} flashcard${n === 1 ? '' : 's'}`, sub: '',
+        reason: `Due today — about ${Math.max(1, Math.round(n / 4))} min`,
+        prefill: { type: 'flashcards', goal: `Review ${n} due cards`, sprintLen: 15 },
+      });
+    }
+  }
   const top = rankedTopics().find(({ topic }) => !items.some((i) => i.prefill?.topicIds?.includes(topic.id)));
   if (top && items.length < 4) {
     const type = suggestedType(top.topic, top.stats);
@@ -262,4 +281,109 @@ export function weekStats() {
 
 export function lastSession() {
   return [...S.sessions].sort((a, b) => (b.endedAt || '').localeCompare(a.endedAt || ''))[0] || null;
+}
+
+// ---------- Flashcards (Phase 2) ----------
+export const BOX_DAYS = [1, 3, 7, 14, 30];
+export const CARD_TYPES = [
+  { key: 'formula', label: 'Formula' },
+  { key: 'explain', label: 'Explain key phrase' },
+  { key: 'definition', label: 'Definition' },
+  { key: 'gdc', label: 'Calculator (GDC) steps' },
+  { key: 'fix', label: 'Fix / rule' },
+];
+export const cardTypeLabel = (k) => CARD_TYPES.find((t) => t.key === k)?.label || k;
+export function newCardFields() { return { box: 1, dueAt: today(), lastReviewed: null, history: [] }; }
+
+/** Good → up one box, Easy → up two, Again → box 1. Next due = today + that box's interval. */
+export function gradeCard(c, grade, d = today()) {
+  let box = c.box || 1;
+  if (grade === 'again') box = 1;
+  else if (grade === 'good') box = Math.min(5, box + 1);
+  else if (grade === 'easy') box = Math.min(5, box + 2);
+  return { ...c, box, dueAt: addDays(d, BOX_DAYS[box - 1]), lastReviewed: d, history: [...(c.history || []), { day: d, grade }] };
+}
+export function dueCards(filter = {}) {
+  const d = today();
+  return S.flashcards
+    .filter((c) => c.dueAt && c.dueAt <= d)
+    .filter((c) => !filter.subjectId || c.subjectId === filter.subjectId)
+    .filter((c) => !filter.topicIds || !filter.topicIds.length || filter.topicIds.includes(c.topicId) || filter.topicIds.includes(topicById(c.topicId)?.parentId))
+    .sort((a, b) => a.dueAt.localeCompare(b.dueAt) || (a.box || 1) - (b.box || 1));
+}
+export const dailyCap = () => Number(S.settings.cardCap) || 20;
+export function cardsReviewedToday() {
+  const r = S.meta.cardReviews;
+  return r && r.day === today() ? r.n : 0;
+}
+export function cardsLeftToday() { return Math.max(0, dailyCap() - cardsReviewedToday()); }
+
+// ---------- Practice log (Phase 2) ----------
+export const PRACTICE_EXTRA_SOURCES = ['Past paper', 'Textbook', 'Worksheet', 'Other'];
+export function practiceSources() {
+  const own = (S.settings.practiceSources || []).filter((x) => !PRACTICE_EXTRA_SOURCES.includes(x) && x !== 'Past papers');
+  return [...own, ...PRACTICE_EXTRA_SOURCES];
+}
+/** Questions counted for a set: attempted questions, or marks available when logged as marks. */
+export const setQuestions = (p) => (p.mode === 'marks' ? 0 : p.attempted || 0);
+export function setAccuracy(p) {
+  if (p.mode === 'marks') return p.marksMax ? p.marksGot / p.marksMax : null;
+  return p.attempted ? (p.correct || 0) / p.attempted : null;
+}
+export function practiceWeek(start = weekStart()) {
+  const end = addDays(start, 6);
+  const sets = S.practiceSets.filter((p) => p.date >= start && p.date <= end);
+  const bySubject = new Map();
+  let q = 0, hard = 0, got = 0, max = 0;
+  for (const p of sets) {
+    const k = p.subjectId || '_none';
+    if (!bySubject.has(k)) bySubject.set(k, { q: 0, hard: 0, got: 0, max: 0, sets: 0 });
+    const r = bySubject.get(k);
+    const n = p.mode === 'marks' ? 0 : (p.attempted || 0);
+    const g = p.mode === 'marks' ? (p.marksGot || 0) : (p.correct || 0);
+    const m = p.mode === 'marks' ? (p.marksMax || 0) : (p.attempted || 0);
+    const h = p.difficulty === 'hard' ? (p.mode === 'marks' ? m : n) : 0;
+    r.q += n; r.got += g; r.max += m; r.sets++; r.hard += h;
+    q += n; got += g; max += m; hard += h;
+  }
+  return { sets, bySubject, questions: q, accuracy: max ? got / max : null, hardShare: max ? hard / max : null, total: max };
+}
+
+// ---------- Past papers (Phase 2) ----------
+export const PAPER_STATUS = ['Not started', 'Done', 'Reviewed'];
+export function paperLabel(p) {
+  const s = subjectById(p.subjectId);
+  const bits = [p.session, p.year, p.paper ? `P${p.paper}` : '', p.tz && p.tz !== 'none' ? p.tz : ''].filter(Boolean).join(' ');
+  return bits || (s ? subjectLabel(s) : 'Paper');
+}
+export const paperPct = (p) => (p.score !== null && p.score !== undefined && p.score !== '' && p.max ? (Number(p.score) / Number(p.max)) * 100 : null);
+export function boundaryFor(p) {
+  return S.gradeBoundaries.find((b) => b.subjectId === p.subjectId && String(b.paper || '') === String(p.paper || '')
+    && String(b.year || '') === String(p.year || '') && (b.session || '') === (p.session || '')) || null;
+}
+/** Estimated grade from entered boundaries (marks). Never hardcoded. */
+export function estimatedGrade(p) {
+  const b = boundaryFor(p);
+  if (!b || p.score === null || p.score === undefined || p.score === '') return null;
+  const rows = (b.rows || []).filter((r) => r.min !== '' && r.min !== null && r.min !== undefined).sort((x, y) => Number(y.min) - Number(x.min));
+  const hit = rows.find((r) => Number(p.score) >= Number(r.min));
+  return hit ? hit.grade : (rows.length ? rows[rows.length - 1].grade : null);
+}
+/** Target line: the average % needed for the target grade across boundaries the user entered. */
+export function targetPct(subject) {
+  if (!subject?.target) return null;
+  const vals = S.gradeBoundaries.filter((b) => b.subjectId === subject.id && b.max).map((b) => {
+    const r = (b.rows || []).find((x) => String(x.grade) === String(subject.target));
+    return r && r.min !== '' && r.min !== null ? (Number(r.min) / Number(b.max)) * 100 : null;
+  }).filter((v) => v !== null);
+  return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
+}
+
+// ---------- Weekly review ----------
+export function reviewDue() {
+  if (!on('weeklyReview')) return false;
+  const day = S.profile?.answers?.reviewDay ?? 0; // 0 = Sunday
+  if (new Date().getDay() !== day) return false;
+  const ws = weekStart();
+  return !S.weeklyReviews.some((r) => r.date >= ws);
 }

@@ -156,6 +156,12 @@ function summaryRows() {
     fx.askType && 'Mistake type on every mistake',
     fx.notesField && '“Where my notes are” on every topic',
     fx.blurtMore && 'More blurting suggestions',
+    fx.flashcards && 'Flashcards',
+    fx.weeklyReview && 'Weekly review, shown on Today on review day',
+    fx.practiceLog && 'Practice log',
+    fx.papers && 'Past paper tracker',
+    fx.testPrep && 'Test prep packs',
+    fx.sharePacks && 'Share packs',
   ].filter(Boolean);
   const rows = [
     ['name', 'Name', A.name || 'Skipped'],

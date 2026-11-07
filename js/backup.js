@@ -54,6 +54,9 @@ export function backupSummary(obj) {
     subjects: (d.subjects || []).length,
     mistakes: (d.mistakes || []).length,
     sessions: (d.sessions || []).length,
+    flashcards: (d.flashcards || []).length,
+    practiceSets: (d.practiceSets || []).length,
+    papers: (d.papers || []).length,
     photos: (d.photos || []).length,
   };
 }

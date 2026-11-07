@@ -7,14 +7,17 @@ import {
 import { esc, icon, bus, chips, fmtClock, toast, confirmDialog, plural, subjectDot, fmtDay, emptyState } from '../ui.js';
 import * as session from '../session.js';
 import { openQuickAdd, openRedo } from './mistakes.js';
+import { openReview, cardFromGap } from './cards.js';
+import { practiceSources, dueCards, cardsLeftToday } from '../logic.js';
 
 let pending = undefined; // prefill from Today / shortcuts
 let draft = null;
-let rv = { goalDone: null, attempted: '', correct: '', focus: null };
+let rv = { goalDone: null, attempted: '', correct: '', focus: null, source: null, difficulty: 'medium' };
 let hist = { q: '', subjectId: '', limit: 20 };
 let gapText = '';
 
-const PHASE1_TYPES = SESSION_TYPES.filter((t) => t.key !== 'flashcards' || on('flashcards'));
+const sessionTypes = () => SESSION_TYPES.filter((t) => t.key !== 'flashcards' || on('flashcards'));
+const RING_R = 92, RING_C = 2 * Math.PI * RING_R;
 
 function defaultHardStop(totalMin) {
   const d = new Date(Date.now() + (totalMin + 30) * 60000);
@@ -63,7 +66,7 @@ function setupHtml() {
     ${d.subjectId ? `<div class="field"><span class="field-label">Topic${ordered.length ? 's' : ''} <span class="hint">(optional)</span></span>
       ${ordered.length ? chips('topicIds', ordered.map((t) => ({ value: t.id, label: topicLabel(t) })), d.topicIds, { multi: true, act: 'set' })
         : `<p class="small muted">No topics for this subject yet. ${on('topicTracker') ? `<a href="#topics/${d.subjectId}">Add topics</a>` : `<a href="#topics/${d.subjectId}">Add topics</a>`}</p>`}</div>` : ''}
-    <div class="field"><span class="field-label">Session type</span>${chips('type', PHASE1_TYPES.map((t) => ({ value: t.key, label: t.label })), d.type, { act: 'set' })}</div>
+    <div class="field"><span class="field-label">Session type</span>${chips('type', sessionTypes().map((t) => ({ value: t.key, label: t.label })), d.type, { act: 'set' })}</div>
     <label class="field"><span>Done means… ${required ? '' : '<span class="hint">(optional)</span>'}</span>
       <input type="text" name="goal" value="${esc(d.goal)}" placeholder="e.g. all 4 hard questions attempted" ${required ? 'required' : ''} data-input="goal"></label>
     <div class="grid2">
@@ -120,6 +123,13 @@ function redoPanel(a) {
     <button class="btn btn-soft" data-act="openRedo">${icon('redo')} Open redo mode</button></div></div>`;
 }
 
+function cardsPanel(a) {
+  if (a.type !== 'flashcards' || !on('flashcards')) return '';
+  const due = Math.min(dueCards({ subjectId: a.subjectId, topicIds: a.topicIds }).length, cardsLeftToday());
+  return `<div class="card quiet"><div class="row between wrap"><div><b>Flashcards</b><div class="small muted">${due ? `${plural(due, 'card')} due here.` : 'Nothing due here — you can practise any cards from the Flashcards page.'}</div></div>
+    <button class="btn btn-soft" data-act="openCards">${icon('cards', 18)} Review cards</button></div></div>`;
+}
+
 function soundBanner() {
   if (!S.settings.sound || session.audioReady()) return '';
   return `<div class="card quiet"><div class="row between wrap"><span class="small">Sound is paused after reloading the page.</span><button class="btn btn-soft" data-act="enableSound">Turn sound on</button></div></div>`;
@@ -154,8 +164,10 @@ function runHtml(a) {
       <div class="timer-wrap">
         <div class="phase">${esc(label)}${a.paused ? ' · paused' : ''}</div>
         ${a.type === 'blurting' && !isBreak ? `<div class="blurt-topic">${esc(topicName || subjectLabel(subjectById(a.subjectId)))}</div><p class="small muted">Write everything you remember — on paper or your tablet.</p>` : ''}
-        <div class="countdown${a.paused ? ' paused' : ''}" id="countdown" aria-live="off">${fmtClock(rem)}</div>
-        <div class="progress-ring"><div id="progress" style="width:${pct}%"></div></div>
+        <div class="ring${isBreak ? ' break' : ''}"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="track" cx="100" cy="100" r="${RING_R}" fill="none" stroke-width="7"/>
+          <circle class="bar" id="progress" cx="100" cy="100" r="${RING_R}" fill="none" stroke-width="7" stroke-linecap="round" stroke-dasharray="${RING_C.toFixed(1)}" stroke-dashoffset="${(RING_C * (1 - pct / 100)).toFixed(1)}"/></svg>
+          <div class="inner"><div class="countdown${a.paused ? ' paused' : ''}" id="countdown" aria-live="off">${fmtClock(rem)}</div>
+          <div class="small muted">${isBreak ? 'until the next sprint' : `of ${Math.round(a.phaseDur / 60000)} min`}</div></div></div>
         ${isBreak ? `<p class="goal-line" style="margin-top:18px">${esc(session.breakIdea(a) || 'Take a proper break away from the screen.')}</p>`
           : a.goal ? `<p class="goal-line" style="margin-top:18px"><span class="muted small">Done means</span><br>${esc(a.goal)}</p>` : ''}
         <div class="timer-controls">
@@ -163,7 +175,7 @@ function runHtml(a) {
           ${isBreak ? `<button class="btn btn-primary" data-act="nextSprint">Skip break</button>` : `<button class="btn btn-soft" data-act="logMistake">${icon('plus')} Log mistake</button>`}
         </div>
       </div>
-      ${isBreak ? '' : redoPanel(a) + carelessCard(a)}`;
+      ${isBreak ? '' : redoPanel(a) + cardsPanel(a) + carelessCard(a)}`;
   }
 
   if (a.phase === 'breakDone') {
@@ -182,10 +194,11 @@ function runHtml(a) {
 
   if (a.phase === 'gaps') {
     const subjectId = a.subjectId;
-    return `<div class="card"><h2>What did you miss?</h2><p class="muted small">Check your notes. Type each gap — each one can go into your mistake log with one tap.</p>
+    return `<div class="card"><h2>What did you miss?</h2><p class="muted small">Check your notes. Type each gap — each one can go into your mistake log${on('flashcards') ? ' or become a flashcard' : ''} with one tap.</p>
       <form class="row" data-submit="addGap"><input type="text" class="grow" id="gap-input" placeholder="e.g. Forgot the units of magnetic flux" value="${esc(gapText)}" data-input="gapText" autofocus><button class="btn" type="submit">${icon('plus')} Add</button></form>
       <ul class="list" style="margin-top:10px">${a.gaps.map((g, i) => `<li class="list-item" style="cursor:default;align-items:center"><span class="grow">${esc(g.text)}</span>
-        ${g.mistakeId ? `<span class="pill ok">${icon('check', 14)} In mistake log</span>` : `<button class="btn btn-soft" data-act="gapToMistake" data-i="${i}" ${subjectId ? '' : ''}>→ Mistake log</button>`}</li>`).join('')}</ul>
+        <span class="row" style="gap:6px">${g.mistakeId ? `<span class="pill ok">${icon('check', 14)} Mistake log</span>` : `<button class="btn btn-sm btn-soft" data-act="gapToMistake" data-i="${i}">→ Mistake log</button>`}
+        ${on('flashcards') ? (g.cardId ? `<span class="pill ok">${icon('check', 14)} Flashcard</span>` : `<button class="btn btn-sm btn-soft" data-act="gapToCard" data-i="${i}">→ Flashcard</button>`) : ''}</span></li>`).join('')}</ul>
       <div class="row-actions end"><button class="btn btn-primary" data-act="toReview">Continue</button></div></div>`;
   }
 
@@ -197,7 +210,10 @@ function runHtml(a) {
       ${chips('goalDone', [{ value: 'yes', label: 'Yes' }, { value: 'partly', label: 'Partly' }, { value: 'no', label: 'No' }], rv.goalDone, { act: 'rv' })}</div>` : ''}
     ${PRACTICE_TYPES.has(a.type) || a.type === 'blurting' ? `<div class="grid2">
       <label class="field"><span>Questions attempted</span><input type="number" min="0" inputmode="numeric" value="${esc(rv.attempted)}" data-input="rvAttempted"></label>
-      <label class="field"><span>Correct</span><input type="number" min="0" inputmode="numeric" value="${esc(rv.correct)}" data-input="rvCorrect"></label></div>` : ''}
+      <label class="field"><span>Correct</span><input type="number" min="0" inputmode="numeric" value="${esc(rv.correct)}" data-input="rvCorrect"></label></div>
+      ${on('practiceLog') && PRACTICE_TYPES.has(a.type) ? `<div class="card flat" style="margin:-4px 0 16px"><p class="small muted" style="margin-top:0">Questions you enter here go into your practice log, with ${mins || 'the'} minutes as the time spent.</p>
+        <div class="field"><span class="field-label">Source</span>${chips('source', practiceSources(), rv.source || (a.type === 'paper' ? 'Past paper' : S.settings.lastPracticeSource || practiceSources()[0]), { act: 'rvPick' })}</div>
+        <div class="field" style="margin:0"><span class="field-label">Difficulty</span>${chips('difficulty', ['easy', 'medium', 'hard'].map((d) => ({ value: d, label: d[0].toUpperCase() + d.slice(1) })), rv.difficulty, { act: 'rvPick' })}</div></div>` : ''}` : ''}
     <div class="field"><span class="field-label">Focus <span class="hint">(1 = scattered, 5 = locked in)</span></span>
       <div class="scale">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="${rv.focus === n ? 'on' : ''}" data-act="rvFocus" data-v="${n}">${n}</button>`).join('')}</div></div>
     <div class="card soft" style="margin:6px 0 0"><div class="row between wrap"><span>Any mistakes to log? ${a.mistakeIds.length ? `<span class="small muted">(${plural(a.mistakeIds.length, 'logged')} this session)</span>` : ''}</span>
@@ -228,7 +244,7 @@ function updateClock() {
   const rem = session.remainingMs(a);
   if (el) el.textContent = fmtClock(rem);
   const p = document.getElementById('progress');
-  if (p && a.phaseDur) p.style.width = `${100 - (rem / a.phaseDur) * 100}%`;
+  if (p && a.phaseDur) p.setAttribute('stroke-dashoffset', (RING_C * (rem / a.phaseDur)).toFixed(1));
   document.title = titleFor(a);
 }
 
@@ -257,7 +273,7 @@ function startFromDraft() {
     sprintLen: d.sprintLen, breakLen: d.breakLen, sprints: d.sprints, hardStopAt, planId: d.planId,
   }, { ritual: on('startRitual') && (S.settings.ritualItems || []).length > 0 });
   draft = null;
-  rv = { goalDone: null, attempted: '', correct: '', focus: null };
+  rv = { goalDone: null, attempted: '', correct: '', focus: null, source: null, difficulty: 'medium' };
   gapText = '';
 }
 
@@ -331,6 +347,15 @@ export default {
     keepNo: () => session.keepGoing(false),
     logMistake,
     openRedo: () => { const a = session.active(); openRedo({ subjectId: a.subjectId, topicId: a.topicIds[0], allowOpen: true }); },
+    openCards: () => { const a = session.active(); openReview({ subjectId: a.subjectId, topicIds: a.topicIds }); },
+    gapToCard: (el) => {
+      const a = session.active(); const i = Number(el.dataset.i);
+      const g = a.gaps[i]; if (!g) return;
+      const c = cardFromGap(g.text, { subjectId: a.subjectId, topicId: a.topicIds[0] });
+      session.update({ gaps: a.gaps.map((x, j) => (j === i ? { ...x, cardId: c.id } : x)) });
+      bus.refresh();
+    },
+    rvPick: (el) => { rv[el.dataset.name] = el.dataset.value; bus.refresh(); },
     addGap: () => {
       const t = gapText.trim(); if (!t) return;
       const a = session.active();
@@ -363,8 +388,15 @@ export default {
     },
     save: () => {
       const num = (v) => (v === '' || v === null ? null : Math.max(0, Number(v)));
+      const cur = session.active();
       const rec = session.finish({ goalDone: rv.goalDone, attempted: num(rv.attempted), correct: num(rv.correct), focus: rv.focus });
-      rv = { goalDone: null, attempted: '', correct: '', focus: null };
+      if (rec && on('practiceLog') && PRACTICE_TYPES.has(rec.type) && rec.attempted) {
+        const source = rv.source || (rec.type === 'paper' ? 'Past paper' : S.settings.lastPracticeSource || practiceSources()[0]);
+        save('practiceSets', { subjectId: rec.subjectId, topicId: rec.topicIds?.[0] || null, source, difficulty: rv.difficulty || 'medium', mode: 'questions',
+          attempted: rec.attempted, correct: Math.min(rec.correct ?? 0, rec.attempted), marksGot: null, marksMax: null, minutes: Math.round((rec.focusMs || 0) / 60000), date: rec.day || today(), sessionId: rec.id });
+      }
+      void cur;
+      rv = { goalDone: null, attempted: '', correct: '', focus: null, source: null, difficulty: 'medium' };
       const mins = Math.round((rec?.focusMs || 0) / 60000);
       toast(mins ? `Saved — ${mins} minutes${rec.subjectId ? ` on ${subjectLabel(subjectById(rec.subjectId))}` : ''}.` : 'Saved.');
       bus.go('#today');

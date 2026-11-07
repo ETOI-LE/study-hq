@@ -1,8 +1,10 @@
 // Today: one big start button, what to do next (with reasons), this week.
 import { S, on, setMeta, uid } from '../store.js';
 import {
-  upNext, weekStats, subjectById, subjectLabel, subjectsByGap, topicsOf, topicLabel, today, addDays, daysBetween, dayStr,
+  upNext, weekStats, subjectById, subjectLabel, subjectsByGap, topicsOf, topicLabel, today, addDays, daysBetween, dayStr, typeLabel, reviewDue, practiceWeek,
 } from '../logic.js';
+import { weekPracticeCard, openPracticeLog } from './practice.js';
+import { openCardEditor, openReview } from './cards.js';
 import { esc, icon, bus, chips, openModal, closeModal, modalHead, renderModal, toast, plural, subjectOptions } from '../ui.js';
 import * as session from '../session.js';
 import focusView from './focus.js';
@@ -34,34 +36,53 @@ function weekCard() {
   const w = weekStats();
   const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const t = today();
-  const dots = w.days.map((d, i) => `<div class="d"><div class="c${w.studied.has(d) ? ' on' : ''}${d === t ? ' today' : ''}" title="${d}${w.studied.has(d) ? ' — studied' : ''}"></div>${labels[i]}</div>`).join('');
+  const dots = w.days.map((d, i) => `<div class="d"><div class="c${w.studied.has(d) ? ' on' : ''}${d === t ? ' today' : ''}" title="${d}${w.studied.has(d) ? ' — studied' : ''}">${icon('check', 15)}</div>${labels[i]}</div>`).join('');
   const rows = subjectsByGap().map((s) => ({ s, m: w.minutes.get(s.id) || 0 })).filter((r) => r.m > 0);
   const none = w.minutes.get('_none') || 0;
   const max = Math.max(1, ...rows.map((r) => r.m), none);
-  const bars = rows.map(({ s, m }) => `<div class="bar-row"><span class="label">${esc(subjectLabel(s))}</span><div class="track"><div class="fill" style="width:${(m / max) * 100}%;background:${esc(s.color)}"></div></div><span class="muted small">${m} min</span></div>`).join('')
-    + (none ? `<div class="bar-row"><span class="label">General</span><div class="track"><div class="fill" style="width:${(none / max) * 100}%"></div></div><span class="muted small">${none} min</span></div>` : '');
+  const bars = rows.map(({ s, m }) => `<div class="bar-row"><span class="label">${esc(subjectLabel(s))}</span><div class="track"><div class="fill" style="width:${(m / max) * 100}%;background:${esc(s.color)}"></div></div><span class="muted small tabnum">${m} min</span></div>`).join('')
+    + (none ? `<div class="bar-row"><span class="label">General</span><div class="track"><div class="fill" style="width:${(none / max) * 100}%"></div></div><span class="muted small tabnum">${none} min</span></div>` : '');
   const n = w.studied.size;
-  return `<div class="card"><div class="row between"><h3>This week</h3><span class="muted small">${n ? `${plural(n, 'day')} studied · ${w.total} min` : 'A fresh week'}</span></div>
+  return `<div class="card"><div class="card-head"><h3>This week</h3><span class="muted small">${n ? `<b data-count="${n}">${n}</b> ${n === 1 ? 'day' : 'days'} studied · <span data-count="${w.total}">${w.total}</span> min` : 'A fresh week'}</span></div>
     <div class="week-dots" aria-label="Days studied this week">${dots}</div>
     ${bars ? `<div class="bars">${bars}</div>` : `<p class="muted small" style="margin:0">Minutes per subject show up here after your first session.</p>`}</div>`;
 }
 
-function upNextCard(items) {
-  if (!items.length) {
+const KIND_ICON = { plan: 'sparkle', redo: 'redo', cards: 'cards', topic: 'topics' };
+
+function upNextCard(list) {
+  if (!list.length) {
     const hasSubjects = S.subjects.length > 0;
     return `<div class="card"><h3>Up next</h3><div class="empty" style="padding:14px 0">
       <p>${hasSubjects ? 'Suggestions appear here once you’ve logged a mistake or rated a topic.' : 'Add your subjects and Study HQ will suggest what to work on, with a reason for each.'}</p>
       <p class="example">e.g. “Calculus — blurting · Confidence 2/5 · not studied for 12 days”</p>
       ${hasSubjects ? '' : `<a class="btn btn-soft" href="#settings/subjects">Add subjects</a>`}</div></div>`;
   }
-  return `<div class="card up-next"><h3>Up next</h3><ul class="list">${items.map((it, i) => `
+  return `<div class="card up-next"><div class="card-head"><h3>Up next</h3><span class="tiny muted">Picked for you, with the reason</span></div><ul class="list">${list.map((it, i) => `
     <li><button class="list-item" data-act="item" data-i="${i}">
-      <span class="num">${i + 1}</span>
+      <span class="num k-${it.kind}">${icon(KIND_ICON[it.kind] || 'chev', 16)}</span>
       <span class="grow"><span class="title">${esc(it.title)}</span>
       ${it.sub ? `<span class="muted small"> · ${esc(it.sub)}</span>` : ''}
       <span class="reason" style="display:block">${esc(it.reason)}</span></span>
-      ${icon('chev')}
+      ${i === 0 ? '<span class="pill accent">First</span>' : ''}${icon('chev')}
     </button></li>`).join('')}</ul></div>`;
+}
+
+function heroCard(first, plan) {
+  const fiveMain = on('justFiveMain');
+  const startBtn = `<button class="btn ${fiveMain ? '' : 'btn-primary btn-big btn-start'}" data-act="start">${icon('play')} Start studying <span class="kbd">S</span></button>`;
+  const fiveBtn = `<button class="btn ${fiveMain ? 'btn-primary btn-big btn-start' : ''}" data-act="five">${icon('timer', 18)} Just 5 minutes</button>`;
+  const p = first?.prefill || {};
+  const s = subjectById(p.subjectId || (first ? null : S.settings.lastSubjectId));
+  const len = p.sprintLen || (p.type === 'blurting' ? 10 : S.settings.lastSetup?.sprintLen || S.settings.sprintLen || 20);
+  const eyebrow = plan ? 'Your first step — set last night' : first ? 'Up next' : 'Ready when you are';
+  const title = first ? first.title : (fiveMain ? 'Start tiny: just 5 minutes' : 'One focus session');
+  const why = first ? first.reason : (fiveMain ? 'Starting is the hard part. Five minutes, then decide if you keep going.' : 'Everything is set up — press start and the timer runs.');
+  return `<div class="hero"><div class="eyebrow">${esc(eyebrow)}</div>
+    <div class="hero-title">${esc(title)}</div>
+    <div class="hero-why">${esc(why)}</div>
+    <div class="hero-meta">${s ? `<span class="tag" style="--c:${esc(s.color)}">${esc(subjectLabel(s))}</span>` : ''}${p.type ? `<span class="pill">${esc(typeLabel(p.type))}</span>` : ''}${first || !fiveMain ? `<span class="pill">${icon('timer', 13)} ${len} min</span>` : ''}</div>
+    <div class="start-block">${fiveMain ? fiveBtn + startBtn : startBtn + fiveBtn}</div></div>`;
 }
 
 let items = [];
@@ -70,42 +91,43 @@ function render() {
   items = upNext();
   const plan = items.find((i) => i.kind === 'plan');
   const a = session.active();
-  const fiveMain = on('justFiveMain');
-  const startBtn = `<button class="btn ${fiveMain ? '' : 'btn-primary btn-big'}" data-act="start">${icon('play')} Start studying <span class="kbd">S</span></button>`;
-  const fiveBtn = `<button class="btn ${fiveMain ? 'btn-primary btn-big' : ''}" data-act="five">Just 5 minutes</button>`;
   const hour = new Date().getHours();
   const tomorrowPlan = S.meta.plan && S.meta.plan.forDay === addDays(today(), 1);
   const evening = on('eveningPrompt') && hour >= 18 && !tomorrowPlan;
   const taskApp = S.settings.taskApp;
+  const pending = S.meta.pendingImport;
 
   return `
     <div class="page-head"><div><div class="hello">${esc(greeting())}</div>
       <p class="muted">${new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p></div></div>
 
-    ${a ? `<div class="card soft"><div class="row between wrap"><div><b>Session in progress</b><div class="small muted">${esc(session.describe(a) || 'Focus session')}</div></div>
-      <a class="btn btn-primary" href="#focus">Back to session</a></div></div>` : ''}
+    ${a ? `<div class="hero"><div class="eyebrow">Session in progress</div><div class="hero-title">${esc(session.describe(a) || 'Focus session')}</div>
+      <div class="hero-why">Your timer is still running in the background.</div><div class="start-block"><a class="btn btn-primary btn-big" href="#focus">${icon('play')} Back to session</a></div></div>`
+      : heroCard(items[0], plan)}
 
-    ${plan ? `<div class="card first-step"><div class="tiny muted" style="text-transform:uppercase;letter-spacing:.06em;font-weight:600">Your first step</div>
-      <div style="font-size:1.15rem;font-weight:650;margin:4px 0">${esc(plan.title)}</div>
-      <div class="small muted">${esc(plan.sub)}</div></div>` : ''}
+    ${pending ? `<div class="card soft"><div class="row between wrap"><div><b>A friend shared a pack with you</b><div class="small muted">Preview it before anything is added.</div></div>
+      <div class="row"><button class="btn btn-ghost" data-act="dropPack">Not now</button><a class="btn btn-primary" href="#share/import/${esc(pending)}">Preview</a></div></div></div>` : ''}
 
-    ${a ? '' : `<div class="start-block">${fiveMain ? fiveBtn + startBtn : startBtn + fiveBtn}</div>
-      ${items[0] ? `<p class="small muted center" style="margin-top:2px">Starts with: ${esc(items[0].title)}</p>` : ''}`}
+    ${reviewDue() ? `<div class="card soft"><div class="row between wrap"><div><b>It’s weekly review day</b><div class="small muted">15 minutes to look back and pick next week’s focus topics.</div></div>
+      <a class="btn btn-primary" href="#review">${icon('review', 18)} Start review</a></div></div>` : ''}
 
     ${evening ? `<div class="card soft"><div class="row between wrap"><div><b>Set up tomorrow?</b><div class="small muted">Pick one tiny first step so tomorrow starts itself.</div></div>
       <button class="btn btn-primary" data-act="tomorrow">Set up tomorrow</button></div></div>` : ''}
 
     ${upNextCard(items)}
-    ${weekCard()}
 
-    <div class="row wrap" style="gap:10px">
-      ${evening ? '' : `<button class="btn" data-act="tomorrow">${tomorrowPlan ? 'Edit tomorrow’s first step' : 'Set up tomorrow'}</button>`}
-      <button class="btn" data-act="newMistake">${icon('plus')} Log a mistake <span class="kbd">N</span></button>
+    ${on('practiceLog') && practiceWeek().sets.length ? `<div class="grid2" style="margin-bottom:16px">${weekCard()}${weekPracticeCard({ compact: true })}</div>` : weekCard()}
+
+    <div class="quick-actions">
+      <button class="btn" data-act="newMistake">${icon('plus')} Log a mistake <span class="kbd" style="margin-left:auto">N</span></button>
+      ${on('practiceLog') ? `<button class="btn" data-act="newPractice">${icon('practice', 18)} Log practice</button>` : ''}
+      ${on('flashcards') ? `<button class="btn" data-act="newCard">${icon('cards', 18)} New flashcard</button>` : ''}
+      ${evening ? '' : `<button class="btn" data-act="tomorrow">${icon('sparkle', 18)} ${tomorrowPlan ? 'Edit tomorrow’s step' : 'Set up tomorrow'}</button>`}
     </div>
 
-    ${needsBackupReminder() ? `<div class="card quiet" style="margin-top:16px"><div class="row between wrap"><div><b>Time for a backup?</b>
+    ${needsBackupReminder() ? `<div class="card quiet"><div class="row between wrap"><div><b>Time for a backup?</b>
       <div class="small muted">${backupDaysAgo() === null ? 'You haven’t backed up yet.' : `Last backup was ${backupDaysAgo()} days ago.`} It’s one tap and keeps your work safe.</div></div>
-      <a class="btn" href="#settings/backup">Back up</a></div></div>` : ''}
+      <a class="btn" href="#settings/backup">${icon('download', 18)} Back up</a></div></div>` : ''}
 
     ${taskApp ? `<p class="tiny muted center" style="margin-top:24px">Deadlines live in ${esc(taskApp)} — Study HQ handles the studying.</p>` : ''}`;
 }
@@ -165,10 +187,14 @@ export default {
       const it = items[Number(el.dataset.i)];
       if (!it) return;
       if (it.kind === 'redo') { openRedo({ ids: [it.mistakeId] }); return; }
+      if (it.kind === 'cards') { openReview(); return; }
       focusView.prefill(it.prefill);
       bus.go('#focus');
     },
     tomorrow: openTomorrow,
+    newPractice: () => openPracticeLog(),
+    newCard: () => openCardEditor(),
+    dropPack: () => { setMeta('pendingImport', null); bus.refresh(); },
     newMistake: async () => { const { openQuickAdd } = await import('./mistakes.js'); openQuickAdd(); },
   },
 };

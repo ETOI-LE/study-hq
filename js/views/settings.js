@@ -50,10 +50,9 @@ function render() {
     <div class="row-actions"><a class="btn" href="#onboarding/edit">Change my answers</a><a class="btn btn-ghost" href="#onboarding/redo">Redo onboarding</a></div></div>
 
   <h2 class="section-title" id="sec-features">Features</h2>
-  <div class="card">${FEATURES.filter((x) => x.phase === 1).map((x) => toggle('feature', x.key, f[x.key], x.label, x.desc)).join('')}
-    <div class="divider"></div>
-    <p class="small muted" style="margin-bottom:4px">Coming in Phase 2 — these switch on by themselves when they arrive, based on your setup:</p>
-    ${FEATURES.filter((x) => x.phase === 2).map((x) => toggle('feature', x.key, f[x.key], x.label, f[x.key] ? 'Will be on' : 'Will be off')).join('')}</div>
+  <div class="grid2"><div class="card"><h3>Study tools</h3>${FEATURES.filter((x) => ['topicTracker', 'flashcards', 'practiceLog', 'papers', 'weeklyReview', 'testPrep', 'sharePacks'].includes(x.key)).map((x) => toggle('feature', x.key, f[x.key], x.label, x.desc)).join('')}</div>
+    <div class="card"><h3>Habits and helpers</h3>${FEATURES.filter((x) => !['topicTracker', 'flashcards', 'practiceLog', 'papers', 'weeklyReview', 'testPrep', 'sharePacks'].includes(x.key)).map((x) => toggle('feature', x.key, f[x.key], x.label, x.desc)).join('')}</div></div>
+    ${f.flashcards ? `<div class="card" style="margin-top:16px"><div class="field" style="margin:0"><span class="field-label">Flashcards per day <span class="hint">— a cap so reviews never pile up</span></span>${chips('cardCap', [10, 20, 30, 50].map((n) => ({ value: String(n), label: String(n) })), String(st.cardCap || 20), { act: 'setNum' })}</div></div>` : ''}
 
   <h2 class="section-title" id="sec-subjects">Subjects and topics</h2>
   <div class="card">${S.subjects.length ? `<ul class="list">${S.subjects.map((s) => `<li class="list-item" style="cursor:default;align-items:center">
@@ -87,8 +86,8 @@ function render() {
       <button class="btn btn-primary" data-act="export">${icon('download')} Export everything</button>
       <label class="btn">${icon('upload')} Import backup<input type="file" accept="application/json,.json" class="sr-only" data-change="import"></label>
       <button class="btn" data-act="csv">Mistake log as CSV</button>
+      <button class="btn" data-act="practiceCsv">Practice log as CSV</button>
     </div>
-    <p class="tiny muted" style="margin:10px 0 0">Practice log CSV arrives with the practice log in Phase 2.</p>
     <div class="divider"></div>
     <div class="row wrap">${hasSample() ? `<button class="btn" data-act="clearSample">Clear sample data</button>` : '<span class="small muted">No sample data.</span>'}
       <button class="btn btn-ghost btn-danger" data-act="erase">Erase everything</button></div></div>
@@ -97,7 +96,7 @@ function render() {
   <div class="card"><p class="small">Your data is stored only in this browser on this device (IndexedDB). It is never sent to a server, and anyone else who opens the same link gets their own empty Study HQ — they can’t see yours.</p>
     <p class="small">No sign-up, no analytics, no tracking, no ads.</p>
     <p class="small muted" style="margin:0">Because data lives in this browser, clearing your browser’s site data deletes it. Use Export to keep a backup or move to another device.</p></div>
-  <p class="tiny muted center" style="margin-top:24px">Study HQ · Phase 1</p>`;
+  <p class="tiny muted center" style="margin-top:24px">Study HQ · Phase 2</p>`;
 }
 
 // ---------- Subjects ----------
@@ -201,7 +200,7 @@ async function importFile(file) {
   const sum = backupSummary(obj);
   const when = sum.exportedAt ? new Date(sum.exportedAt).toLocaleString() : 'unknown date';
   const ok = await confirmDialog('Restore this backup?',
-    `Backup from ${when}: ${plural(sum.subjects, 'subject')}, ${plural(sum.mistakes, 'mistake')}, ${plural(sum.sessions, 'session')}, ${plural(sum.photos, 'photo')}. This replaces everything currently in Study HQ on this browser.`,
+    `Backup from ${when}: ${plural(sum.subjects, 'subject')}, ${plural(sum.mistakes, 'mistake')}, ${plural(sum.sessions, 'session')}${sum.flashcards ? `, ${plural(sum.flashcards, 'flashcard')}` : ''}${sum.practiceSets ? `, ${plural(sum.practiceSets, 'practice set')}` : ''}${sum.papers ? `, ${plural(sum.papers, 'paper')}` : ''}, ${plural(sum.photos, 'photo')}. This replaces everything currently in Study HQ on this browser.`,
     'Restore', true);
   if (!ok) return;
   try {
@@ -277,6 +276,7 @@ export default {
     },
     import: (el) => { const file = el.files && el.files[0]; el.value = ''; if (file) importFile(file); },
     csv: () => { if (!S.mistakes.length) { toast('No mistakes to export yet.'); return; } exportMistakesCsv(); },
+    practiceCsv: async () => { if (!S.practiceSets.length) { toast('No practice logged yet.'); return; } const { exportPracticeCsv } = await import('./practice.js'); exportPracticeCsv(); },
     clearSample: async () => {
       if (!(await confirmDialog('Clear sample data?', 'Removes the sample subjects and everything logged under them (mistakes, sessions, topics). Your own subjects and their data stay.', 'Clear'))) return;
       clearSampleData(); toast('Sample data cleared.'); bus.refresh();

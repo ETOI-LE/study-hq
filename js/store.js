@@ -158,6 +158,7 @@ export function defaultSettings() {
     carelessItems: [...DEFAULT_CARELESS],
     sound: true,
     theme: 'system',
+    cardCap: 20,
     lastBackupAt: null,
   };
 }
@@ -174,12 +175,12 @@ export const FEATURES = [
   { key: 'askType', label: 'Ask mistake type every time', desc: 'Shows mistake type on the quick-add form.', phase: 1 },
   { key: 'notesField', label: '“Where my notes are” on every topic', desc: 'Shows where your notes live right on each topic.', phase: 1 },
   { key: 'blurtMore', label: 'Suggest blurting more often', desc: 'Today suggests blurting for any topic below 4/5.', phase: 1 },
-  { key: 'flashcards', label: 'Flashcards', desc: 'Coming in Phase 2.', phase: 2 },
-  { key: 'weeklyReview', label: 'Weekly review', desc: 'Coming in Phase 2.', phase: 2 },
-  { key: 'practiceLog', label: 'Practice log', desc: 'Coming in Phase 2.', phase: 2 },
-  { key: 'papers', label: 'Past paper tracker', desc: 'Coming in Phase 2.', phase: 2 },
-  { key: 'testPrep', label: 'Test prep pack', desc: 'Coming in Phase 2.', phase: 2 },
-  { key: 'sharePacks', label: 'Share packs', desc: 'Coming in Phase 2.', phase: 2 },
+  { key: 'flashcards', label: 'Flashcards', desc: 'Formulas, key phrases, definitions and GDC steps with spaced review.', phase: 2 },
+  { key: 'weeklyReview', label: 'Weekly review', desc: 'A guided 15-minute review; picks next week’s focus topics.', phase: 2 },
+  { key: 'practiceLog', label: 'Practice log', desc: 'Questions per subject, accuracy and the share of hard questions.', phase: 2 },
+  { key: 'papers', label: 'Past paper tracker', desc: 'Papers to do, scores, grade boundaries and a chart.', phase: 2 },
+  { key: 'testPrep', label: 'Test prep pack', desc: 'A one-page checklist for an upcoming test.', phase: 2 },
+  { key: 'sharePacks', label: 'Share packs', desc: 'Share decks, topic lists and fix sheets with friends.', phase: 2 },
 ];
 
 export function featuresFor(answers) {

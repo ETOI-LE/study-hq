@@ -34,6 +34,19 @@ const ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
   bell: '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/>',
+  cards: '<rect x="3" y="7" width="14" height="13" rx="2"/><path d="M7 4h12a2 2 0 0 1 2 2v11"/>',
+  practice: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  papers: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h4"/>',
+  review: '<path d="M4 5h16v14H4z"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/>',
+  prep: '<path d="M9 4h6v3H9z"/><path d="M7 5H5v16h14V5h-2M9 12l2 2 4-4M9 17h6"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+  more: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  flame: '<path d="M12 3s5 4.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 1.5-4S9 12 11 12c0-4 1-9 1-9z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4M9 2h6"/>',
 };
 
 export function icon(name, size = 20) {
@@ -74,7 +87,9 @@ export function openModal(m) {
   m.el = wrap;
   m.body = wrap.querySelector('.modal');
   modalStack.push(m);
-  renderModal(m);
+  // First paint now; run mount() just after, so callers' `const m = openModal(…)` is assigned before mount code uses it.
+  m.body.innerHTML = m.html();
+  if (m.mount) queueMicrotask(() => { if (modalStack.includes(m)) m.mount(m.body); });
   document.body.classList.add('modal-open');
   const first = m.body.querySelector('[autofocus]') || m.body.querySelector('input,textarea,select,button');
   if (first && window.matchMedia('(pointer: fine)').matches) setTimeout(() => first.focus(), 30);
